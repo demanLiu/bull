@@ -41,7 +41,7 @@ func main() {
 	url := flag.Args()[0]
 	requestTime := *requestNum / *cNum
 	waitgroup.Add(*requestNum)
-
+	go spinner(100 * time.Microsecond)
 	for requestTime > 0 {
 		perTimeNum = *cNum
 		for perTimeNum > 0 {
@@ -59,10 +59,10 @@ func main() {
 		close(result)
 	}()
 	//break until close channel
-
+	r := &Report{}
 	for s := range result {
 		if s {
-
+			r.Non2xxNums++
 		}
 	}
 
@@ -80,6 +80,7 @@ func httpGet(url string) bool {
 		fmt.Println(err)
 
 	}
+	defer res.Body.Close()
 	return res.StatusCode == 200
 }
 
