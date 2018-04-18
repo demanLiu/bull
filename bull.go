@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -21,6 +22,10 @@ var waitgroup sync.WaitGroup
 type Report struct {
 	Concurrency       int
 	TotalTime         time.Duration
+	DNSTime           time.Duration
+	BuildConTime      time.Duration
+	RequestTime       time.Duration
+	WaitRespTime      time.Duration
 	CompleteNums      int
 	FailedNums        int
 	Non2xxNums        int
@@ -46,7 +51,7 @@ func main() {
 	method := "GET"
 	requestTime := *requestNum / *cNum
 	waitgroup.Add(*requestNum)
-	// go spinner(100 * time.Microsecond)
+	go spinner(100 * time.Microsecond)
 	for requestTime > 0 {
 		perTimeNum = *cNum
 		for perTimeNum > 0 {
@@ -117,7 +122,7 @@ func httpRequest(method, url string) bool {
 		},
 		GotConn: func(info httptrace.GotConnInfo) {
 			// fmt.Printf("Got a connection: reused: %v, from the idle pool: %v.\n", info.Reused, info.WasIdle)
-			getConDone = time.Now():
+			getConDone = time.Now()
 
 		},
 		WroteRequest: func(info httptrace.WroteRequestInfo) {
@@ -138,12 +143,39 @@ func httpRequest(method, url string) bool {
 		log.Fatal("Fatal error:", err)
 	}
 	req = req.WithContext(traceCtx)
-	_, err = http.DefaultClient.Do(req)
+	//TODO client add option
+	requestHeader := make(http.Header)
+	// requestHeader.Set("Content-Type", "text/html")
+	// requestHeader.Set("User-Agent", "lh/0.0.1")
+	req.Header = requestHeader
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Request error: %v\n", err)
 		os.Exit(1)
 	}
+	dnsTime := dnsDone.Sub(dnsStart)
+	buildConTime := conDone.Sub(conStart)
+	reqTime := writeReq.Sub(getConDone)
+	waitRespTime := getResp.Sub(writeReq)
 	totalTime := time.Now().Sub(begin)
+	fmt.Println(dnsTime)
+	fmt.Println(buildConTime)
+	fmt.Println(reqTime)
+	fmt.Println(waitRespTime)
 	fmt.Println(totalTime)
+	fmt.Println("resp")
+	fmt.Println(resp.StatusCode)
+	var size int64
+	size = resp.ContentLength
+	defer resp.Body.Close()
+	if resp.ContentLength < 0 {
+		bodyLength, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			// handle error
+		}
+		size = int64(len(bodyLength))
+	}
+	fmt.Println(size)
+
 	return true
 }
